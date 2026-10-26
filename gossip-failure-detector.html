@@ -1,0 +1,1139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gossip Failure Detector Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: sticky tab bar; Guided = lesson text beside a live cluster; Playground = cluster + controls, metrics and experiments below. */
+:root{
+  --bg:#f2f5f9; --surface:#ffffff; --surface2:#e8edf4; --ink:#141a26; --muted:#586377; --line:#d3dae5;
+  --accent:#1f5eff; --accent-ink:#ffffff; --accent-soft:#dfe8ff;
+  --ok:#168a50; --warn:#b97300; --bad:#d13b3b; --info:#7249d6;
+  --sub0:#4f8cff; --sub1:#e08a1e; --sub2:#2db37a; --sub3:#c35fd8;
+  --font-display:"Bricolage Grotesque","IBM Plex Sans",system-ui,sans-serif;
+  --font-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0d121a; --surface:#151c27; --surface2:#1e2735; --ink:#e6ebf3; --muted:#93a0b5; --line:#2b3546;
+    --accent:#6c97ff; --accent-ink:#0b1220; --accent-soft:#1d2a4a;
+    --ok:#3fc886; --warn:#f0b23c; --bad:#ff6d6d; --info:#ab8dff;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0d121a; --surface:#151c27; --surface2:#1e2735; --ink:#e6ebf3; --muted:#93a0b5; --line:#2b3546;
+  --accent:#6c97ff; --accent-ink:#0b1220; --accent-soft:#1d2a4a;
+  --ok:#3fc886; --warn:#f0b23c; --bad:#ff6d6d; --info:#ab8dff;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 var(--font-body)}
+.wrap{max-width:1280px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3,h4{font-family:var(--font-display);margin:0;text-wrap:balance;line-height:1.15}
+h1{font-size:clamp(22px,3.4vw,32px);letter-spacing:-.01em}
+h2{font-size:clamp(20px,2.4vw,26px);letter-spacing:-.01em}
+h3{font-size:17px}
+h4{font-size:12px;font-family:var(--font-body);font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+p{margin:0 0 .8em;max-width:68ch}
+code,.mono{font-family:var(--font-mono);font-size:.92em}
+a{color:var(--accent)}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--bg);border-bottom:1px solid var(--line)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:30}
+.top .wrap{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:8px 24px;padding-top:14px}
+.brand p{margin:2px 0 0;color:var(--muted);font-size:13px}
+.tabs{display:flex;gap:4px}
+.tabs button{background:none;border:0;border-bottom:3px solid transparent;padding:10px 14px;cursor:pointer;font-weight:600;color:var(--muted)}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.tabs button:hover{color:var(--ink)}
+main{padding-block:22px 60px}
+.tab[hidden]{display:none}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.stack{display:flex;flex-direction:column;gap:16px}
+.btn{background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:7px 12px;cursor:pointer;font-weight:500;line-height:1.2}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn:disabled{opacity:.45;cursor:default}
+.btn.sm{padding:5px 9px;font-size:13px}
+.chip{display:inline-block;padding:1px 8px;border-radius:99px;font-size:12px;font-weight:600;font-family:var(--font-mono)}
+.chip.ok{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
+.chip.warn{background:color-mix(in srgb,var(--warn) 20%,transparent);color:var(--warn)}
+.chip.bad{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
+.chip.gone{background:var(--surface2);color:var(--muted)}
+
+/* Learn */
+.learn{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+.learn .full{grid-column:1/-1}
+.learn ol{margin:0;padding-left:1.2em}
+.learn li{margin-bottom:.5em;max-width:70ch}
+.learn table{border-collapse:collapse;width:100%;font-size:14px}
+.learn th,.learn td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+.learn th{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.tablewrap{overflow-x:auto}
+.kv{font-family:var(--font-mono);font-size:13px}
+.example{display:inline-grid;grid-template-columns:auto auto auto;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;font-family:var(--font-mono);font-size:13px}
+.example span{padding:5px 12px;border-bottom:1px solid var(--line)}
+.example .h{background:var(--surface2);font-weight:500;color:var(--muted)}
+.example span:nth-last-child(-n+3){border-bottom:0}
+
+/* Stage (canvas + observer table) */
+.stage{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.stage canvas{display:block;width:100%;aspect-ratio:1.1/1;max-height:600px;cursor:pointer;touch-action:manipulation}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;padding:8px 12px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+.banner{position:absolute;left:12px;top:10px;font-size:12.5px;font-weight:600;color:var(--bad);font-family:var(--font-mono)}
+.obs{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.obs header{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line)}
+.obs header b{font-family:var(--font-display);font-size:16px}
+.obs .scroll{max-height:340px;overflow:auto}
+.obs table{width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:12.5px}
+.obs th{position:sticky;top:0;background:var(--surface2);text-align:left;font-weight:500;color:var(--muted);padding:5px 10px;font-family:var(--font-body);font-size:11.5px;letter-spacing:.05em;text-transform:uppercase}
+.obs td{padding:4px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+.obs tr.fresh td{background:var(--accent-soft)}
+.obs tr.me td{font-weight:500}
+.bar{display:inline-block;width:64px;height:6px;background:var(--surface2);border-radius:3px;vertical-align:middle;margin-left:6px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--ok)}
+.bar.warn i{background:var(--warn)}.bar.bad i{background:var(--bad)}
+.truth-up{color:var(--ok)}.truth-down{color:var(--bad)}
+
+/* Guided */
+.g-layout{display:grid;grid-template-columns:230px minmax(0,1fr);gap:16px;align-items:start}
+.g-nav{position:sticky;top:calc(env(safe-area-inset-top,0px) + 76px)}
+.g-nav ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.g-nav button{width:100%;text-align:left;background:none;border:1px solid transparent;border-radius:8px;padding:8px 10px;cursor:pointer;display:flex;gap:10px;align-items:baseline}
+.g-nav button:hover{background:var(--surface2)}
+.g-nav button[aria-current="true"]{background:var(--surface);border-color:var(--line);font-weight:600}
+.g-nav .n{font-family:var(--font-mono);font-size:12px;color:var(--muted)}
+.g-main{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:16px;align-items:start}
+.g-text h2{margin-bottom:8px}
+.steps{list-style:none;margin:14px 0;padding:0;display:flex;flex-direction:column;gap:8px}
+.steps li{display:grid;grid-template-columns:22px 1fr;gap:8px;padding:8px 10px;border-radius:8px;border:1px solid var(--line);opacity:.62}
+.steps li .dot{width:20px;height:20px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;font-size:11px;font-family:var(--font-mono)}
+.steps li.done .dot{background:var(--ok);border-color:var(--ok);color:#fff}
+.steps li.cur{opacity:1;border-color:var(--accent);background:var(--surface)}
+.steps li.cur .dot{border-color:var(--accent);color:var(--accent)}
+.steps li p{margin:0 0 8px}
+.steps li .btn{margin-top:2px}
+.readout{font-family:var(--font-mono);font-size:13px;background:var(--surface2);border-radius:8px;padding:10px 12px;min-height:3.2em}
+.g-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.mini-controls{display:flex;gap:10px;align-items:center;padding:8px 12px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+.mini-controls input{flex:1;min-width:60px}
+
+/* Merge demo */
+.merge{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.merge .obs table input{width:56px;font:inherit;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:2px 4px}
+.merge .changed td{background:var(--accent-soft)}
+.mlog{margin:12px 0 0;padding:10px 12px;background:var(--surface2);border-radius:8px;font-size:13px;min-height:5em}
+.mlog div{font-family:var(--font-mono);font-size:12.5px}
+
+/* Playground */
+.p-layout{display:grid;grid-template-columns:minmax(0,7fr) minmax(280px,4fr);gap:16px;align-items:start}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+.toolbar .sp{flex:1}
+.ctrl-group{margin-bottom:14px}
+.ctrl{margin:8px 0 12px}
+.ctrl label{display:flex;justify-content:space-between;gap:8px;font-weight:500;font-size:13.5px}
+.ctrl label output{font-family:var(--font-mono);color:var(--accent);font-size:13px}
+.ctrl input[type=range]{width:100%;accent-color:var(--accent);margin:4px 0 0}
+.ctrl input[type=number]{width:100%;font:inherit;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:5px 8px}
+.ctrl small{display:block;color:var(--muted);font-size:12.5px;line-height:1.4}
+.presets{display:flex;flex-wrap:wrap;gap:6px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
+.tile{background:var(--surface2);border-radius:8px;padding:8px 10px}
+.tile b{display:block;font-family:var(--font-mono);font-size:18px;font-weight:500}
+.tile span{font-size:12px;color:var(--muted)}
+.charts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.chart h4{margin-bottom:4px}
+.chart canvas{width:100%;height:170px;display:block}
+.log{list-style:none;margin:0;padding:0;max-height:240px;overflow:auto;font-family:var(--font-mono);font-size:12.5px}
+.log li{padding:3px 0;border-bottom:1px solid var(--line)}
+.log b{color:var(--muted);font-weight:400;margin-right:8px}
+.log .k-crash{color:var(--bad)}.log .k-fp{color:var(--warn)}.log .k-ghost{color:var(--info)}.log .k-ok{color:var(--ok)}
+.theory{font-size:13px;color:var(--muted);margin:10px 0 0}
+.exp-row{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin-bottom:12px}
+.exp-row select,.exp-row input{font:inherit;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+.prog{height:6px;background:var(--surface2);border-radius:3px;overflow:hidden;flex:1;min-width:120px}
+.prog i{display:block;height:100%;width:0;background:var(--accent);transition:width .15s}
+
+footer.foot{border-top:1px solid var(--line);padding-block:20px 32px;color:var(--muted);font-size:13.5px}
+footer.foot h4{margin-bottom:6px}
+footer.foot p{margin:0;overflow-wrap:anywhere}
+@media (max-width:980px){
+  .g-layout,.g-main,.p-layout,.learn{grid-template-columns:minmax(0,1fr)}
+  .g-nav{position:static}
+  .g-nav ol{flex-direction:row;flex-wrap:wrap}
+  .g-nav button{width:auto}
+  .charts,.merge,.grid2{grid-template-columns:minmax(0,1fr)}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <div class="brand">
+      <h1>Gossip Failure Detector Lab</h1>
+      <p>Interactive companion to <i>A Gossip-Style Failure Detection Service</i> (van Renesse, Minsky, Hayden, 1998)</p>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Sections">
+      <button role="tab" id="tb-learn" data-tab="learn" aria-selected="true">Learn</button>
+      <button role="tab" id="tb-guided" data-tab="guided" aria-selected="false">Guided steps</button>
+      <button role="tab" id="tb-play" data-tab="play" aria-selected="false">Playground</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- ================= LEARN ================= -->
+<section id="tab-learn" class="tab" aria-labelledby="tb-learn">
+  <div class="learn">
+    <div class="panel">
+      <h2>The problem</h2>
+      <p style="margin-top:10px">A group of processes needs to know which members are still alive. A central monitor is a single point of failure. Having every member ping every other member each period costs N messages per member per period, which stops scaling quickly.</p>
+      <p>The paper's answer: every member keeps a small table of heartbeat counters and, once per interval, sends that table to <b>one randomly chosen member</b>. Counters spread through the group like an epidemic. A member whose counter stops growing everywhere is presumed dead.</p>
+      <p style="margin-bottom:0">Traffic per member stays constant (one message per round, though each message grows with N), and the verdict is reached independently by every member with no coordinator.</p>
+    </div>
+    <div class="panel">
+      <h2>State at each member</h2>
+      <p style="margin:10px 0">Each member holds a list with one row per member it knows about:</p>
+      <div class="example" aria-label="Example heartbeat list">
+        <span class="h">member</span><span class="h">heartbeat</span><span class="h">local time of last increase</span>
+        <span>A</span><span>41</span><span>t = 1038</span>
+        <span>B</span><span>37</span><span>t = 1031</span>
+        <span>C</span><span>12</span><span>t = 992</span>
+      </div>
+      <p style="margin-top:12px;margin-bottom:0">The last column comes from <b>this member's own clock</b>. Clocks are never compared between members, so no clock synchronization is needed. Only "how long ago did I last see this counter go up?" matters.</p>
+    </div>
+
+    <div class="panel full">
+      <h2>The algorithm in five steps</h2>
+      <ol style="margin-top:12px">
+        <li><b>Tick.</b> Every <code>T_gossip</code> a member increments its own heartbeat and updates its own row.</li>
+        <li><b>Gossip.</b> It picks one member at random from its list and sends its whole list.</li>
+        <li><b>Merge.</b> On receipt, for each row keep the <i>larger</i> heartbeat. Whenever a row's heartbeat increases, record the current local time in that row.</li>
+        <li><b>Suspect.</b> If a row's heartbeat has not increased for <code>T_fail</code>, mark the member failed. The row stays in the list but is no longer passed on in gossip.</li>
+        <li><b>Forget.</b> After a further <code>T_cleanup</code>, delete the row. The wait matters: members reach the failed state at slightly different times, so if a row were deleted right away, a slower member that has not yet marked it failed could still gossip a stale copy and bring the dead member back with a fresh timer.</li>
+      </ol>
+      <p class="theory">In this lab one "round" is 10 simulation ticks, and <code>T_gossip</code> is one round. Parameters below are therefore in rounds.</p>
+    </div>
+
+    <div class="panel full">
+      <h2>Parameters and their trade-offs</h2>
+      <div class="tablewrap" style="margin-top:8px">
+      <table>
+        <thead><tr><th>Parameter</th><th>What it does</th><th>Turn it up</th><th>Turn it down</th></tr></thead>
+        <tbody>
+          <tr><td><code>T_gossip</code> (round)</td><td>Interval between gossips</td><td>Less traffic, but everything else takes longer in wall-clock time</td><td>Faster detection, more bandwidth</td></tr>
+          <tr><td><code>T_fail</code></td><td>Silence needed before a member is declared failed</td><td>Fewer false accusations, slower detection</td><td>Faster detection, more false accusations</td></tr>
+          <tr><td><code>T_cleanup</code></td><td>How long a failed row is kept before deletion</td><td>Safe against resurrection, slightly more memory</td><td>Ghost entries: dead members get re-added by stale gossip</td></tr>
+          <tr><td>Members (N)</td><td>Group size</td><td>News needs about log N rounds to reach everyone, so T_fail must grow slowly with N. Message size grows linearly.</td><td>Faster and cheaper</td></tr>
+          <tr><td>Message loss</td><td>Fraction of messages that never arrive</td><td>News arrives later, so false accusations rise unless T_fail grows</td><td>Behaves close to the ideal case</td></tr>
+          <tr><td>Gossips per round</td><td>Fan-out (the paper uses one)</td><td>Faster spread, proportionally more traffic</td><td>Cheapest</td></tr>
+          <tr><td>Subnets and cross-subnet probability</td><td>Biases peer choice toward the local subnet, in the spirit of the paper's multi-level gossip</td><td>More traffic over routers, faster global news</td><td>Cheap on routers, slower news between subnets</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>What the paper argues</h2>
+      <ul style="margin:10px 0 0;padding-left:1.2em">
+        <li>The chance of a false accusation drops roughly exponentially as <code>T_fail</code> grows.</li>
+        <li>For a fixed accuracy, the needed <code>T_fail</code> grows only logarithmically with group size.</li>
+        <li>Detection stays reliable under substantial message loss and under many simultaneous crashes, if <code>T_fail</code> is chosen with them in mind.</li>
+        <li>On networks with several subnets, gossip should favor local peers so routers are not overloaded.</li>
+      </ul>
+      <p class="theory">This lab is a simplified simulation for building intuition. Use the Playground's experiment runner to see these trends in numbers.</p>
+    </div>
+    <div class="panel">
+      <h2>How to use this page</h2>
+      <ul style="margin:10px 0 0;padding-left:1.2em">
+        <li><b>Guided steps</b> walks through eight flows: the table, the merge rule, epidemic spread, crash detection, resurrection, false accusations, partitions and subnets.</li>
+        <li><b>Playground</b> gives you every knob, a live cluster, charts, an event log and a batch experiment runner.</li>
+        <li>On any cluster, <b>click a node</b> to see the world from its point of view: green means fresh news, amber means ageing, red means marked failed.</li>
+        <li>Runs are deterministic for a given seed, so you can repeat an experiment exactly.</li>
+      </ul>
+      <div class="g-actions"><button class="btn primary" data-goto="guided">Start the guided steps</button><button class="btn" data-goto="play">Open the playground</button></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= GUIDED ================= -->
+<section id="tab-guided" class="tab" hidden aria-labelledby="tb-guided">
+  <div class="g-layout">
+    <aside class="g-nav"><h4 style="margin:0 0 8px 10px">Flows</h4><ol id="g-nav"></ol></aside>
+    <div class="g-main">
+      <div class="g-text panel">
+        <h2 id="g-title"></h2>
+        <div id="g-intro" style="margin-top:8px"></div>
+        <ol class="steps" id="g-steps"></ol>
+        <h4 style="margin-bottom:6px">Live readout</h4>
+        <div class="readout" id="g-readout"></div>
+        <div class="g-actions">
+          <button class="btn" id="g-restart">Restart flow</button>
+          <button class="btn" id="g-prev">Previous flow</button>
+          <button class="btn primary" id="g-next">Next flow</button>
+        </div>
+      </div>
+      <div id="g-stage-wrap" class="stack">
+        <div id="g-sim"></div>
+        <div id="g-merge" hidden></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= PLAYGROUND ================= -->
+<section id="tab-play" class="tab" hidden aria-labelledby="tb-play">
+  <div class="p-layout">
+    <div class="stack" style="min-width:0">
+      <div>
+        <div class="toolbar">
+          <button class="btn primary" id="p-play">Pause</button>
+          <button class="btn" id="p-tick" title="Advance one tick (a tenth of a round)">+1 tick</button>
+          <button class="btn" id="p-round">+1 round</button>
+          <span style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)">Speed<input type="range" id="p-speed" min="1" max="60" value="10" style="width:110px;accent-color:var(--accent)" aria-label="Simulation speed"></span>
+          <span class="sp"></span>
+          <button class="btn" id="p-reset">Reset</button>
+        </div>
+        <div id="p-sim"></div>
+        <div class="toolbar" style="margin-top:10px">
+          <button class="btn" id="p-crash-sel">Crash selected</button>
+          <button class="btn" id="p-revive-sel">Revive selected</button>
+          <button class="btn" id="p-crash-rand">Crash random</button>
+          <button class="btn" id="p-add">Add member</button>
+          <button class="btn" id="p-part">Split network</button>
+        </div>
+      </div>
+      <div class="panel">
+        <h3 style="margin-bottom:10px">Metrics</h3>
+        <div class="tiles" id="p-tiles"></div>
+        <p class="theory" id="p-theory"></p>
+      </div>
+      <div class="panel charts">
+        <div class="chart"><h4>Crashed members detected (% of live members)</h4><canvas id="c-cov"></canvas></div>
+        <div class="chart"><h4>Live members wrongly marked failed (pairs)</h4><canvas id="c-wrong"></canvas></div>
+      </div>
+      <div class="panel">
+        <h3 style="margin-bottom:8px">Event log</h3>
+        <ul class="log" id="p-log"></ul>
+      </div>
+    </div>
+
+    <div class="stack" style="min-width:0">
+      <div class="panel">
+        <h3 style="margin-bottom:8px">Scenarios</h3>
+        <div class="presets" id="p-presets"></div>
+        <p class="theory" id="p-preset-note">Pick a scenario to load its settings and restart the cluster.</p>
+      </div>
+      <div class="panel" id="p-controls"></div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:16px">
+    <h3>Experiment runner</h3>
+    <p class="theory" style="margin-top:4px">Runs many headless simulations with your current settings. In each trial the cluster warms up, one random member crashes, and the trial ends when every live member has marked it failed. Sweep one parameter to see the trade-off curve.</p>
+    <div class="exp-row" style="margin-top:12px">
+      <label>Sweep<br><select id="x-var">
+        <option value="tfail">T_fail (2 to 16 rounds)</option>
+        <option value="loss">Message loss (0 to 60%)</option>
+        <option value="n">Members N (4 to 64)</option>
+        <option value="fanout">Gossips per round (1 to 4)</option>
+        <option value="tcleanup">T_cleanup (0 to 12 rounds)</option>
+      </select></label>
+      <label>Trials per point<br><input id="x-trials" type="number" min="3" max="60" value="15" style="width:90px"></label>
+      <button class="btn primary" id="x-run">Run sweep</button>
+      <div class="prog" aria-hidden="true"><i id="x-prog"></i></div>
+    </div>
+    <div class="charts">
+      <div class="chart"><h4 id="x-t1">Rounds until every live member detects the crash</h4><canvas id="x-c1"></canvas></div>
+      <div class="chart"><h4 id="x-t2">False accusations per 1000 member-rounds</h4><canvas id="x-c2"></canvas></div>
+    </div>
+    <p class="theory" id="x-note"></p>
+  </div>
+</section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <h4>Reference</h4>
+    <p>R. van Renesse, Y. Minsky, M. Hayden. <i>A Gossip-Style Failure Detection Service.</i> Middleware '98.
+    <a href="http://cs.cornell.edu/home/rvr/papers/GossipFD.pdf" target="_blank" rel="noopener">http://cs.cornell.edu/home/rvr/papers/GossipFD.pdf</a></p>
+  </div>
+</footer>
+
+<script>
+/* =====================================================================
+   Simulation engine. One round = TPR ticks. Time is a global tick count,
+   but each node only ever uses differences of it (its own local clock).
+   ===================================================================== */
+const TPR = 10;
+const DEFAULTS = {n:16, tfail:8, tcleanup:12, loss:0.05, latency:3, fanout:1, subnets:1, crossP:0.2, seed:7};
+
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const label = id => id < 26 ? String.fromCharCode(65+id) : 'N'+id;
+
+class Sim{
+  constructor(p){ this.p = Object.assign({}, DEFAULTS, p); this.reset(); }
+  reset(){
+    this.rng = mulberry32(this.p.seed>>>0);
+    this.time = 0; this.nodes = []; this.msgs = []; this.log = []; this.mlog = []; this.hist = [];
+    this.partition = false; this.watch = null;
+    this.stats = {sent:0, entries:0, lost:0, cross:0, falsePos:0, recovered:0, ghosts:0, roundSent:0};
+    for(let i=0;i<this.p.n;i++) this._mk(i);
+    for(const a of this.nodes) for(const b of this.nodes) a.table.set(b.id,{hb:0,t:0,failed:false,failedAt:0});
+  }
+  _mk(i){
+    const n = this.p.n;
+    const node = {id:i, alive:true, hb:0, table:new Map(), phase:Math.floor(this.rng()*TPR),
+      subnet: i<n ? Math.floor(i*this.p.subnets/n) : this.p.subnets-1, group: i<Math.ceil(n/2)?0:1,
+      crashT:null, detectedBy:null, firstDetect:null, allDetect:null, ghosts:0};
+    this.nodes.push(node); return node;
+  }
+  addNode(){
+    const alive = this.nodes.filter(n=>n.alive);
+    const node = this._mk(this.nodes.length);
+    node.table.set(node.id,{hb:0,t:this.time,failed:false,failedAt:0});
+    if(alive.length){
+      const seed = alive[Math.floor(this.rng()*alive.length)];
+      node.table.set(seed.id,{hb:seed.hb,t:this.time,failed:false,failedAt:0});
+    }
+    this.note(`${label(node.id)} joins, knowing only one member`, 'ok');
+    return node;
+  }
+  mlogPush(e){ e.t=this.time; this.mlog.push(e); if(this.mlog.length>400) this.mlog.shift(); }
+  note(msg, kind){ this.log.push({t:this.time,msg,kind:kind||''}); if(this.log.length>300) this.log.shift(); }
+  crash(id){
+    const n = this.nodes[id]; if(!n||!n.alive) return;
+    n.alive=false; n.crashT=this.time; n.detectedBy=new Set(); n.firstDetect=n.allDetect=null;
+    this.note(`${label(id)} crashes`, 'crash');
+  }
+  revive(id){
+    const n = this.nodes[id]; if(!n||n.alive) return;
+    n.alive=true; n.crashT=null;
+    for(const e of n.table.values()){ e.t=this.time; e.failed=false; }
+    this.note(`${label(id)} restarts with its old counter`, 'ok');
+  }
+  introduce(a,b){
+    const A=this.nodes[a], B=this.nodes[b];
+    A.table.set(b,{hb:B.hb,t:this.time,failed:false,failedAt:0});
+    this.note(`${label(a)} is given the address of ${label(b)}`, 'ok');
+  }
+  startWatch(id){ this.watch = {id, hb:this.nodes[id].hb+1, startT:null, doneT:null, count:0}; }
+  runRounds(k){ for(let i=0;i<k*TPR;i++) this.tick(); }
+
+  tick(){
+    this.time++;
+    const rest=[];
+    for(const m of this.msgs){
+      if(m.arr<=this.time){
+        if(m.drop) this.mlogPush({k:'drop',from:m.from,to:m.to});
+        else { const to=this.nodes[m.to]; if(to.alive) this.mlogPush({k:'recv',from:m.from,to:m.to,ch:this._merge(to,m.payload)}); else this.mlogPush({k:'dead',from:m.from,to:m.to}); }
+      }
+      else rest.push(m);
+    }
+    this.msgs = rest;
+    for(const node of this.nodes){
+      if(!node.alive || this.time % TPR !== node.phase) continue;
+      node.hb++;
+      node.table.set(node.id,{hb:node.hb,t:this.time,failed:false,failedAt:0});
+      if(this.watch && this.watch.id===node.id && node.hb===this.watch.hb) this.watch.startT=this.time;
+      const payload=[]; for(const [id,e] of node.table) if(!e.failed) payload.push([id,e.hb]);
+      for(const to of this._pick(node)) this._send(node,this.nodes[to],payload);
+      this._check(node);
+    }
+    const w=this.watch;
+    if(w && w.startT!=null && w.doneT==null){
+      let c=0, a=0;
+      for(const n of this.nodes){ if(!n.alive) continue; a++; const e=n.table.get(w.id); if(e&&e.hb>=w.hb) c++; }
+      w.count=c; if(c===a) w.doneT=this.time;
+    }
+    if(this.time % TPR === 0) this._snapshot();
+  }
+  _pick(node){
+    const cands=[]; for(const id of node.table.keys()) if(id!==node.id) cands.push(id);
+    const out=[], k=Math.min(this.p.fanout,cands.length);
+    for(let i=0;i<k;i++){
+      let pool=cands.filter(c=>!out.includes(c)); if(!pool.length) break;
+      if(this.p.subnets>1){
+        const cross=this.rng()<this.p.crossP;
+        const sub=pool.filter(c=>(this.nodes[c].subnet!==node.subnet)===cross);
+        if(sub.length) pool=sub;
+      }
+      out.push(pool[Math.floor(this.rng()*pool.length)]);
+    }
+    return out;
+  }
+  _send(from,to,payload){
+    const s=this.stats; s.sent++; s.roundSent++; s.entries+=payload.length;
+    const cross = from.subnet!==to.subnet; if(cross) s.cross++;
+    let drop=false;
+    if(this.partition && from.group!==to.group) drop=true;
+    else if(this.rng()<this.p.loss) drop=true;
+    if(drop) s.lost++;
+    const delay = 1+Math.floor(this.rng()*Math.max(1,this.p.latency));
+    this.msgs.push({from:from.id,to:to.id,dep:this.time,arr:this.time+delay,payload,drop,cross});
+    this.mlogPush({k:'send',from:from.id,to:to.id,n:payload.length,drop,cross});
+  }
+  _merge(node,payload){
+    const ch=[];
+    for(const [id,hb] of payload){
+      if(id===node.id) continue;
+      const cur=node.table.get(id);
+      if(!cur){
+        node.table.set(id,{hb,t:this.time,failed:false,failedAt:0}); ch.push([id,null,hb]);
+        const tgt=this.nodes[id];
+        if(!tgt.alive){
+          this.stats.ghosts++; tgt.ghosts++;
+          this.note(`${label(node.id)} re-adds ${label(id)}, which is dead (stale gossip after cleanup)`, 'ghost');
+        }
+      } else if(hb>cur.hb){
+        if(cur.failed){
+          this.stats.recovered++;
+          if(this.nodes[id].alive) this.note(`${label(node.id)} clears its accusation of ${label(id)}`, 'ok');
+        }
+        ch.push([id,cur.hb,hb]); cur.hb=hb; cur.t=this.time; cur.failed=false;
+      }
+    }
+    return ch;
+  }
+  _check(node){
+    const tf=this.p.tfail*TPR, tc=this.p.tcleanup*TPR;
+    for(const [id,e] of node.table){
+      if(id===node.id) continue;
+      if(!e.failed){
+        if(this.time-e.t>=tf){ e.failed=true; e.failedAt=this.time; this._onFail(node,id); }
+      } else if(this.time-e.failedAt>=tc){ node.table.delete(id); }
+    }
+  }
+  _onFail(obs,id){
+    const t=this.nodes[id];
+    if(t.alive){
+      this.stats.falsePos++;
+      this.note(`${label(obs.id)} wrongly marks ${label(id)} failed`, 'fp');
+    } else {
+      t.detectedBy.add(obs.id);
+      if(t.firstDetect==null){ t.firstDetect=this.time; this.note(`${label(obs.id)} is first to mark ${label(id)} failed, ${((this.time-t.crashT)/TPR).toFixed(1)} rounds after the crash`, 'crash'); }
+      if(t.allDetect==null && this.nodes.every(n=>!n.alive||t.detectedBy.has(n.id))){
+        t.allDetect=this.time; this.note(`every live member now marks ${label(id)} failed (${((this.time-t.crashT)/TPR).toFixed(1)} rounds)`, 'crash');
+      }
+    }
+  }
+  wrongPairs(){
+    let c=0;
+    for(const o of this.nodes){ if(!o.alive) continue; for(const [id,e] of o.table) if(e.failed && this.nodes[id].alive) c++; }
+    return c;
+  }
+  coverage(){
+    const dead=this.nodes.filter(n=>!n.alive), alive=this.nodes.filter(n=>n.alive);
+    if(!dead.length||!alive.length) return null;
+    let sum=0;
+    for(const d of dead){ let c=0; for(const o of alive) if(d.detectedBy.has(o.id)) c++; sum+=c/alive.length; }
+    return 100*sum/dead.length;
+  }
+  verdict(id){
+    let failed=0, forgot=0, total=0;
+    for(const o of this.nodes){
+      if(!o.alive||o.id===id) continue; total++;
+      const e=o.table.get(id); if(!e) forgot++; else if(e.failed) failed++;
+    }
+    return {failed,forgot,total};
+  }
+  _snapshot(){
+    this.hist.push({r:this.time/TPR, cov:this.coverage(), wrong:this.wrongPairs(), msgs:this.stats.roundSent});
+    this.stats.roundSent=0;
+    if(this.hist.length>600) this.hist.shift();
+  }
+}
+
+/* =====================================================================
+   Helpers
+   ===================================================================== */
+const $ = (s,r=document)=>r.querySelector(s);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const rounds1 = t => (t/TPR).toFixed(1);
+const SUBC = ['--sub0','--sub1','--sub2','--sub3'];
+
+function lineChart(cv, series, o){
+  const dpr=window.devicePixelRatio||1, w=cv.clientWidth, h=cv.clientHeight; if(!w||!h) return;
+  if(cv.width!==Math.round(w*dpr)||cv.height!==Math.round(h*dpr)){cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);}
+  const c=cv.getContext('2d'); c.setTransform(dpr,0,0,dpr,0,0); c.clearRect(0,0,w,h);
+  const ink=css('--muted'), line=css('--line');
+  const L=38,R=10,T=10,B=24, pw=w-L-R, ph=h-T-B;
+  let xs=[],ys=[]; for(const s of series) for(const p of s.pts) if(p){xs.push(p[0]);ys.push(p[1]);}
+  let x0=o.xmin??Math.min(...xs), x1=o.xmax??Math.max(...xs), y0=o.ymin??0, y1=o.ymax??Math.max(1,...ys);
+  if(!isFinite(x0)){x0=0;x1=1;} if(x1===x0) x1=x0+1; if(y1<=y0) y1=y0+1;
+  if(o.ymax==null){ const mag=Math.pow(10,Math.floor(Math.log10(y1))); y1=Math.ceil(y1/mag*2)/2*mag; }
+  const X=x=>L+(x-x0)/(x1-x0)*pw, Y=y=>T+ph-(y-y0)/(y1-y0)*ph;
+  c.font='11px '+css('--font-mono'); c.textBaseline='middle'; c.lineWidth=1;
+  for(let i=0;i<=4;i++){
+    const v=y0+(y1-y0)*i/4, y=Y(v);
+    c.strokeStyle=line; c.beginPath(); c.moveTo(L,y); c.lineTo(w-R,y); c.stroke();
+    c.fillStyle=ink; c.textAlign='right'; c.fillText(+v.toFixed(v<10?1:0), L-5, y);
+  }
+  c.textAlign='center'; c.textBaseline='top';
+  const xt = o.xticks || (()=>{const a=[];for(let i=0;i<=4;i++)a.push(x0+(x1-x0)*i/4);return a;})();
+  for(const v of xt){ c.fillStyle=ink; c.fillText(o.xfmt?o.xfmt(v):+v.toFixed(1), X(v), h-B+6); }
+  for(const s of series){
+    c.strokeStyle=css(s.color); c.fillStyle=css(s.color); c.lineWidth=2; c.beginPath();
+    let pen=false, last=null;
+    for(const p of s.pts){ if(!p){pen=false;continue;} if(!pen){c.moveTo(X(p[0]),Y(p[1]));pen=true;} else c.lineTo(X(p[0]),Y(p[1])); last=p; }
+    c.stroke();
+    if(o.markers) for(const p of s.pts) if(p){c.beginPath();c.arc(X(p[0]),Y(p[1]),3,0,7);c.fill();}
+    else if(last){c.beginPath();c.arc(X(last[0]),Y(last[1]),3.5,0,7);c.fill();}
+  }
+  if(!xs.length){ c.fillStyle=ink; c.textAlign='center'; c.textBaseline='middle'; c.fillText(o.empty||'no data yet', L+pw/2, T+ph/2); }
+}
+
+/* =====================================================================
+   SimView: canvas + observer table, shared by Guided and Playground
+   ===================================================================== */
+class SimView{
+  constructor(root, opts={}){
+    this.root=root; this.sim=null; this.sel=0; this.mode='observer';
+    this.playing=!!opts.playing; this.speed=opts.speed||10; this.pending=0; this.acc=0;
+    this.onUpdate=opts.onUpdate||null; this.pos=[]; this.lastShown=-1; this.lastTable=0;
+    root.innerHTML=`
+      <div class="stage">
+        <canvas aria-label="Cluster of gossiping members. Click a member to see its heartbeat list."></canvas>
+        <div class="banner" hidden>NETWORK SPLIT</div>
+        <div class="legend"></div>
+        ${opts.speedBar?`<div class="mini-controls"><span>Speed</span><input type="range" min="1" max="60" value="${this.speed}" aria-label="Animation speed"><span class="mono">${this.speed} ticks/s</span></div>`:''}
+      </div>
+      <div class="obs" style="margin-top:12px">
+        <header><b></b><span class="mono" style="font-size:12px;color:var(--muted)"></span></header>
+        <div class="scroll"><table><thead><tr><th>Member</th><th>Heartbeat</th><th>Age (rounds)</th><th>Verdict</th><th title="Ground truth the member cannot see">Truth</th></tr></thead><tbody></tbody></table></div>
+      </div>
+      <div class="obs" style="margin-top:12px">
+        <header><b>Message log</b><label style="font-size:12.5px;color:var(--muted);display:flex;gap:6px;align-items:center"><input type="checkbox" class="mfilter"> only the selected member</label></header>
+        <ul class="log mlogv" aria-live="off" style="padding:6px 12px"></ul>
+      </div>`;
+    this.cv=$('canvas',root); this.legend=$('.legend',root); this.banner=$('.banner',root);
+    this.obsTitle=$('.obs header b',root); this.obsSub=$('.obs header span',root); this.tbody=$('tbody',root);
+    this.mlogEl=$('.mlogv',root); this.mfilter=$('.mfilter',root); this.mfilter.addEventListener('change',()=>this.refreshMsgs());
+    this.cv.addEventListener('click',e=>this.click(e));
+    const sp=$('.mini-controls input',root);
+    if(sp) sp.addEventListener('input',()=>{this.speed=+sp.value; sp.nextElementSibling.textContent=this.speed+' ticks/s';});
+    this.updateLegend();
+  }
+  updateLegend(){
+    const dot=(v,t)=>`<span><i style="background:var(${v})"></i>${t}</span>`;
+    if(this.mode==='watch') this.legend.innerHTML=dot('--accent','has heard the watched heartbeat')+`<span><i style="border:2px solid var(--muted);background:transparent"></i>has not heard yet</span>`+`<span><i style="background:var(--bad)"></i>moving dots are messages</span>`;
+    else if(this.mode==='truth') this.legend.innerHTML=dot('--ok','alive')+dot('--bad','crashed')+`<span>ring colour = subnet</span>`;
+    else this.legend.innerHTML=dot('--accent','observer')+dot('--ok','fresh')+dot('--warn','ageing')+dot('--bad','marked failed')+`<span><i style="border:2px dashed var(--muted);background:transparent"></i>forgotten</span><span>✕ = actually crashed</span>`;
+  }
+  setSim(sim){ this.sim=sim; this.pending=0; this.acc=0; this.lastShown=-1; if(this.sel>=sim.nodes.length) this.sel=0; this.refreshTable(true); this.refreshMsgs(); }
+  setMode(m){ this.mode=m; this.updateLegend(); }
+  queue(ticks){ this.pending+=ticks; }
+  click(e){
+    const r=this.cv.getBoundingClientRect(), x=e.clientX-r.left, y=e.clientY-r.top;
+    let best=-1, bd=1e9;
+    for(const p of this.pos){ const d=Math.hypot(p.x-x,p.y-y); if(d<p.r+8&&d<bd){bd=d;best=p.id;} }
+    if(best>=0){ this.sel=best; this.refreshTable(true); this.refreshMsgs(); if(this.onSelect) this.onSelect(best); }
+  }
+  frame(dt){
+    const sim=this.sim; if(!sim) return;
+    const running = this.playing || this.pending>0;
+    if(running){
+      this.acc+=this.speed*dt;
+      while(this.acc>=1){
+        if(!this.playing && this.pending<=0){this.acc=0;break;}
+        sim.tick(); this.acc-=1; if(this.pending>0) this.pending--;
+      }
+    } else this.acc=0;
+    this.draw(running?this.acc:0);
+    if(sim.time!==this.lastShown){ this.lastShown=sim.time; this.refreshTable(); this.refreshMsgs(); if(this.onUpdate) this.onUpdate(); }
+  }
+  draw(frac){
+    const sim=this.sim, cv=this.cv, dpr=window.devicePixelRatio||1, W=cv.clientWidth, H=cv.clientHeight;
+    if(!W||!H) return;
+    if(cv.width!==Math.round(W*dpr)||cv.height!==Math.round(H*dpr)){cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);}
+    const c=cv.getContext('2d'); c.setTransform(dpr,0,0,dpr,0,0); c.clearRect(0,0,W,H);
+    const N=sim.nodes.length, cx=W/2, cy=H/2;
+    const nr=Math.max(9,Math.min(24,(Math.min(W,H)/2)*Math.sin(Math.PI/Math.max(N,3))*0.78));
+    const R=Math.min(W,H)/2-nr-14;
+    this.pos=[];
+    sim.nodes.forEach((n,i)=>{ const a=-Math.PI/2+2*Math.PI*i/N; this.pos[i]={id:n.id,x:cx+R*Math.cos(a),y:cy+R*Math.sin(a),r:nr,a}; });
+    const col=css, ink=col('--ink'), muted=col('--muted'), surface=col('--surface');
+    // partition line
+    this.banner.hidden=!sim.partition;
+    if(sim.partition){
+      const h=Math.ceil(sim.p.n/2), a1=-Math.PI/2+2*Math.PI*(h-0.5)/N, a2=-Math.PI/2+2*Math.PI*(-0.5)/N;
+      c.save(); c.setLineDash([6,5]); c.strokeStyle=col('--bad'); c.lineWidth=2; c.beginPath();
+      c.moveTo(cx+(R+nr)*Math.cos(a1),cy+(R+nr)*Math.sin(a1)); c.lineTo(cx+(R+nr)*Math.cos(a2),cy+(R+nr)*Math.sin(a2)); c.stroke(); c.restore();
+    }
+    // messages
+    const rt=sim.time+frac;
+    for(const m of sim.msgs){
+      const A=this.pos[m.from], B=this.pos[m.to]; if(!A||!B) continue;
+      let t=(rt-m.dep)/(m.arr-m.dep); t=Math.max(0,Math.min(1,t));
+      if(m.drop && t>0.55) continue;
+      const colr = m.drop?col('--bad'):(m.cross?col('--warn'):col('--accent'));
+      c.globalAlpha=.16; c.strokeStyle=colr; c.lineWidth=1; c.beginPath(); c.moveTo(A.x,A.y); c.lineTo(B.x,B.y); c.stroke();
+      c.globalAlpha=1; c.fillStyle=colr; c.beginPath(); c.arc(A.x+(B.x-A.x)*t,A.y+(B.y-A.y)*t,3.4,0,7); c.fill();
+      if(m.drop){ const x=A.x+(B.x-A.x)*t, y=A.y+(B.y-A.y)*t; c.strokeStyle=colr; c.lineWidth=1.5; c.beginPath(); c.moveTo(x-4,y-4); c.lineTo(x+4,y+4); c.moveTo(x+4,y-4); c.lineTo(x-4,y+4); c.stroke(); }
+    }
+    // nodes
+    const obs=sim.nodes[this.sel];
+    const tf=sim.p.tfail*TPR;
+    c.textAlign='center'; c.textBaseline='middle'; c.font=`600 ${Math.round(nr*0.78)}px ${col('--font-body')}`;
+    for(const n of sim.nodes){
+      const P=this.pos[n.id]; let fill=surface, stroke=muted, dash=false, txt=ink;
+      if(this.mode==='truth'){ fill=col(n.alive?'--ok':'--bad'); txt='#fff'; stroke=col(SUBC[n.subnet%4]); }
+      else if(this.mode==='watch'){
+        const w=sim.watch, e=w&&n.table.get(w.id);
+        if(e&&w&&e.hb>=w.hb){ fill=col('--accent'); txt=col('--accent-ink'); stroke=col('--accent'); }
+      } else {
+        if(n===obs){ fill=col('--accent'); txt=col('--accent-ink'); stroke=col('--accent'); }
+        else {
+          const e=obs&&obs.table.get(n.id);
+          if(!e){ dash=true; stroke=muted; }
+          else if(e.failed){ fill=col('--bad'); txt='#fff'; stroke=fill; }
+          else { const ratio=(sim.time-e.t)/tf; fill=col(ratio>=0.5?'--warn':'--ok'); txt='#fff'; stroke=fill; }
+        }
+      }
+      if(sim.p.subnets>1 && this.mode!=='truth'){ c.beginPath(); c.arc(P.x,P.y,nr+4,0,7); c.lineWidth=3; c.setLineDash([]); c.strokeStyle=col(SUBC[n.subnet%4]); c.globalAlpha=.85; c.stroke(); c.globalAlpha=1; }
+      c.beginPath(); c.arc(P.x,P.y,nr,0,7); c.fillStyle=fill; c.fill();
+      c.lineWidth=2; c.setLineDash(dash?[3,3]:[]); c.strokeStyle=stroke; c.stroke(); c.setLineDash([]);
+      c.fillStyle=txt; c.fillText(label(n.id),P.x,P.y+1);
+      if(!n.alive){ c.strokeStyle=this.mode==='truth'?'#fff':col('--ink'); c.lineWidth=2; const k=nr*0.5; c.beginPath(); c.moveTo(P.x-k,P.y-k); c.lineTo(P.x+k,P.y+k); c.moveTo(P.x+k,P.y-k); c.lineTo(P.x-k,P.y+k); c.stroke(); }
+      if(n.id===this.sel){ c.beginPath(); c.arc(P.x,P.y,nr+(sim.p.subnets>1?8:5),0,7); c.lineWidth=1.5; c.strokeStyle=col('--accent'); c.stroke(); }
+    }
+  }
+  refreshMsgs(){
+    const sim=this.sim; if(!sim) return;
+    const only=this.mfilter.checked, sel=this.sel; let out='', n=0;
+    for(let i=sim.mlog.length-1;i>=0&&n<80;i--){
+      const e=sim.mlog[i]; if(only&&e.from!==sel&&e.to!==sel) continue; n++;
+      const f=label(e.from), t=label(e.to); let txt, cls='';
+      if(e.k==='send'){ txt=`${f} → ${t} sends ${e.n} rows${e.drop?' (will be lost)':''}`; cls=e.drop?'k-fp':''; }
+      else if(e.k==='drop'){ txt=`${f} → ${t} lost in the network`; cls='k-fp'; }
+      else if(e.k==='dead'){ txt=`${t} is down, ${f}'s message is ignored`; cls='k-crash'; }
+      else { const ch=e.ch.map(c=>`${label(c[0])} ${c[1]==null?'new':c[1]}→${c[2]}`);
+        txt=`${t} ← ${f}: `+(ch.length?`updates ${ch.slice(0,6).join(', ')}${ch.length>6?` +${ch.length-6} more`:''}`:'nothing new'); cls=ch.length?'k-ok':''; }
+      out+=`<li class="${cls}"><b>r${rounds1(e.t)}</b>${txt}</li>`;
+    }
+    this.mlogEl.innerHTML=out||'<li><b></b>No messages yet. Run a round.</li>';
+  }
+  refreshTable(){
+    const sim=this.sim; if(!sim) return;
+    const obs=sim.nodes[this.sel]; if(!obs) return;
+    this.obsTitle.textContent=`Member ${label(obs.id)}'s list`;
+    this.obsSub.textContent = obs.alive ? `own counter ${obs.hb}` : 'crashed (frozen)';
+    const tf=sim.p.tfail*TPR; let h='';
+    const ids=[...obs.table.keys()].sort((a,b)=>a-b);
+    for(const id of ids){
+      const e=obs.table.get(id), self=id===obs.id, age=sim.time-e.t, ratio=Math.min(1,age/tf);
+      let chip, cls;
+      if(self){chip='<span class="chip ok">self</span>';cls='ok';}
+      else if(e.failed){chip='<span class="chip bad">FAILED</span>';cls='bad';}
+      else if(ratio>=0.5){chip='<span class="chip warn">ageing</span>';cls='warn';}
+      else {chip='<span class="chip ok">ok</span>';cls='ok';}
+      const fresh = !self && !e.failed && sim.time-e.t<4 && sim.time>0;
+      h+=`<tr class="${fresh?'fresh ':''}${self?'me':''}"><td>${label(id)}</td><td>${e.hb}</td><td>${self?'-':rounds1(age)}<span class="bar ${cls}"><i style="width:${self?0:Math.round(ratio*100)}%"></i></span></td><td>${chip}</td><td class="${sim.nodes[id].alive?'truth-up':'truth-down'}">${sim.nodes[id].alive?'up':'down'}</td></tr>`;
+    }
+    this.tbody.innerHTML=h;
+  }
+}
+
+/* single animation loop for whichever views are visible */
+const views=[]; let lastTs=0;
+function loop(ts){
+  const dt=Math.min(0.1,(ts-lastTs)/1000||0); lastTs=ts;
+  for(const v of views) if(v.root.offsetParent!==null) v.frame(dt);
+  requestAnimationFrame(loop);
+}
+
+/* =====================================================================
+   Tabs
+   ===================================================================== */
+function showTab(name){
+  for(const b of document.querySelectorAll('.tabs button')) b.setAttribute('aria-selected', b.dataset.tab===name);
+  for(const s of document.querySelectorAll('.tab')) s.hidden = s.id!=='tab-'+name;
+  try{ history.replaceState(null,'','#'+name); }catch(e){}
+  window.scrollTo(0,0);
+}
+document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',()=>showTab(b.dataset.tab)));
+document.querySelectorAll('[data-goto]').forEach(b=>b.addEventListener('click',()=>showTab(b.dataset.goto)));
+
+/* =====================================================================
+   Merge demo (guided lesson 2)
+   ===================================================================== */
+const Merge = (()=>{
+  const MEMBERS=['A','B','C','D','E'];
+  let X,Y,flash={},say=[];
+  function fresh(){
+    X={name:'X',now:100,rows:{A:{hb:12,t:96},B:{hb:7,t:90},C:{hb:3,t:60},D:{hb:9,t:97},E:{hb:5,t:88}}};
+    Y={name:'Y',now:240,rows:{A:{hb:10,t:232},B:{hb:7,t:229},C:{hb:6,t:236},D:{hb:4,t:200},E:{hb:8,t:239}}};
+    flash={}; say=['Two members, X and Y, each with their own clock. Edit any heartbeat, then send.'];
+  }
+  function table(n,tag){
+    return `<div class="obs"><header><b>Member ${n.name}</b><span class="mono" style="font-size:12px;color:var(--muted)">local clock = ${n.now}</span></header><table><thead><tr><th>Row</th><th>Heartbeat</th><th>Local time</th></tr></thead><tbody>${
+      MEMBERS.map(m=>`<tr class="${flash[tag+m]?'changed':''}"><td>${m}</td><td><input type="number" min="0" data-t="${tag}" data-m="${m}" value="${n.rows[m].hb}" aria-label="${n.name} heartbeat for ${m}"></td><td>${n.rows[m].t}</td></tr>`).join('')
+    }</tbody></table></div>`;
+  }
+  function render(){
+    const root=$('#g-merge');
+    root.innerHTML=`<div class="merge">${table(X,'X')}${table(Y,'Y')}</div><div class="mlog" id="mlog">${say.map(s=>`<div>${s}</div>`).join('')}</div>`;
+    root.querySelectorAll('input').forEach(i=>i.addEventListener('change',()=>{
+      const n=i.dataset.t==='X'?X:Y; n.rows[i.dataset.m].hb=Math.max(0,parseInt(i.value)||0);
+    }));
+  }
+  function send(from,to){
+    const F=from==='X'?X:Y, T=to==='X'?X:Y; flash={}; say=[`${F.name} sends its list to ${T.name}. ${T.name}'s clock reads ${T.now}.`];
+    for(const m of MEMBERS){
+      const a=F.rows[m].hb, b=T.rows[m].hb;
+      if(a>b){ T.rows[m]={hb:a,t:T.now}; flash[T.name+m]=true; say.push(`${m}: ${a} > ${b}, adopt ${a} and stamp local time ${T.now}`); }
+      else if(a===b) say.push(`${m}: ${a} = ${b}, nothing new, local time unchanged`);
+      else say.push(`${m}: ${a} < ${b}, stale copy ignored, ${T.name} keeps ${b}`);
+    }
+    X.now+=5; Y.now+=5; render();
+  }
+  function shuffle(){
+    for(const n of [X,Y]) for(const m of MEMBERS) n.rows[m].hb=Math.floor(Math.random()*15);
+    flash={}; say=['New random values. Predict each row before you send.']; render();
+  }
+  return {init(){fresh();render();}, send, shuffle};
+})();
+
+/* =====================================================================
+   Guided lessons
+   ===================================================================== */
+const G = {i:0, step:0, sim:null, view:null, mark:{}};
+const gRounds = k => G.view.queue(k*TPR);
+const gMark = () => { const s=G.sim.stats; G.mark={fp:s.falsePos, cross:s.cross, sent:s.sent, rec:s.recovered, ghosts:G.sim.nodes.map(n=>n.ghosts)}; };
+
+const LESSONS = [
+{ title:'The heartbeat list', pane:'sim', mode:'observer', select:0,
+  setup:{n:6, tfail:6, tcleanup:6, loss:0, latency:3, seed:3},
+  intro:'<p>A member keeps one row per member it knows: the largest heartbeat counter it has heard, and its <b>own local time</b> when that counter last went up. That is the whole state of the failure detector.</p>',
+  steps:[
+    {say:'Member A\'s list is on the right (click any node to switch). Every counter is 0 and nobody has gossiped yet.', btn:'Run 1 round', run:()=>{gMark();gRounds(1);}},
+    {say:'Every member added 1 to its own counter and sent its whole list to one random member. The moving dots are those messages. A\'s own row is now 1; other rows change only if a message reached A.', btn:'Run 1 round', run:()=>gRounds(1)},
+    {say:'Keep going. Rows for other members rise as news arrives second-hand. Age is A\'s own clock minus the local time of the last increase, so no clocks are compared between members.', btn:'Run 4 rounds', run:()=>gRounds(4)}
+  ],
+  readout:()=>{const s=G.sim,a=s.nodes[0];return `round ${rounds1(s.time)} · messages sent ${s.stats.sent} · A's own counter ${a.hb}<br>A's view of others: ${[...a.table].filter(([i])=>i!==0).map(([i,e])=>label(i)+'='+e.hb).join('  ')}`;}
+},
+{ title:'Merging two lists', pane:'merge',
+  intro:'<p>The merge rule is the only logic on receipt: <b>for each row, keep the larger heartbeat</b>, and stamp the local clock only when you take a larger one. Because counters only grow, stale gossip can never move anything backwards.</p>',
+  setup:{n:4}, init:()=>Merge.init(),
+  steps:[
+    {say:'X\'s clock is at 100 and Y\'s at 240. They are unrelated, and that is fine. Press send and compare each row.', btn:'X sends to Y', run:()=>Merge.send('X','Y')},
+    {say:'Now the reverse. Rows where Y was already ahead or equal were ignored. Rows Y updated now carry Y\'s clock values, not X\'s.', btn:'Y sends to X', run:()=>Merge.send('Y','X')},
+    {say:'Edit any heartbeat in either table to build your own case (one lower, one equal, one higher) and send again.', btn:'X sends to Y', run:()=>Merge.send('X','Y')},
+    {say:'Try random values. Predict each row before pressing send.', btn:'Shuffle and send Y to X', run:()=>{Merge.shuffle();Merge.send('Y','X');}}
+  ],
+  readout:()=>'Highlighted rows were updated by the last merge. Only highlighted rows got a new local time.'
+},
+{ title:'News spreads like an epidemic', pane:'sim', mode:'watch', select:0,
+  setup:{n:24, tfail:12, tcleanup:12, loss:0, latency:3, seed:11},
+  intro:'<p>Each member sends to just one random peer, yet a new heartbeat reaches everyone in a number of rounds that grows like <b>log N</b>. Informed members double roughly every round at first, then the tail takes a while because random picks keep hitting members that already know.</p>',
+  steps:[
+    {say:'We follow A\'s next heartbeat. Filled blue nodes have heard it.', btn:'Watch A\'s next heartbeat', run:()=>{G.sim.startWatch(0);gRounds(1);}},
+    {say:'Early rounds: the informed set roughly doubles.', btn:'Run 2 rounds', run:()=>gRounds(2)},
+    {say:'Middle rounds: growth is fastest here.', btn:'Run 2 rounds', run:()=>gRounds(2)},
+    {say:'Tail: the last few members are reached by luck. This is why T_fail must be comfortably larger than the spread time.', btn:'Run 6 rounds', run:()=>gRounds(6)},
+    {say:'Watch another heartbeat, or switch to the Playground and change N to see how the spread time scales.', btn:'Watch again', run:()=>{G.sim.startWatch(0);gRounds(1);}}
+  ],
+  readout:()=>{
+    const s=G.sim,w=s.watch,alive=s.nodes.filter(n=>n.alive).length,th=Math.log2(alive)+Math.log(alive);
+    if(!w) return 'Not watching yet.';
+    return `informed: ${w.count} of ${alive} · ${w.doneT!=null?`complete after ${((w.doneT-w.startT)/TPR).toFixed(1)} rounds`:(w.startT==null?'waiting for A to gossip':`elapsed ${((s.time-w.startT)/TPR).toFixed(1)} rounds`)}<br>theory for one gossip per round: about log2 N + ln N = ${th.toFixed(1)} rounds`;
+  }
+},
+{ title:'Detecting a crash', pane:'sim', mode:'observer', select:0,
+  warm:8, setup:{n:10, tfail:10, tcleanup:6, loss:0, latency:3, seed:5},
+  intro:'<p>A crashed member simply stops incrementing its counter. Nobody announces anything. Each member independently notices that the row for F has not changed for <code>T_fail</code> and marks it failed.</p>',
+  steps:[
+    {say:'Crash F. It stops gossiping and its counter freezes.', btn:'Crash F', run:()=>{G.sim.crash(5);gRounds(1);}},
+    {say:'Watch F\'s row in A\'s list. The counter is stuck and the age keeps growing, since no fresher news about F can exist.', btn:'Run 3 rounds', run:()=>gRounds(3)},
+    {say:'Once age reaches T_fail = 10 rounds the row flips to FAILED. Members cross the line at different moments because news about F\'s last heartbeat reached them at different times.', btn:'Run 8 rounds', run:()=>gRounds(8)},
+    {say:'Eventually all live members agree, each on its own evidence.', btn:'Run 4 rounds', run:()=>gRounds(4)},
+    {say:'After T_cleanup more rounds the failed row is deleted. Until then it stays so that stale gossip cannot bring F back. The next flow shows what happens otherwise.', btn:'Run 6 rounds', run:()=>gRounds(6)}
+  ],
+  readout:()=>{const s=G.sim,f=s.nodes[5],v=s.verdict(5),a=s.nodes[0].table.get(5);
+    return `F: marked failed by ${v.failed} of ${v.total} live members, forgotten by ${v.forgot}<br>A's row for F: ${a?`counter ${a.hb}, age ${rounds1(s.time-a.t)} rounds, ${a.failed?'FAILED':'not yet failed'}`:'deleted'}${f.crashT!=null?`<br>time since crash: ${rounds1(s.time-f.crashT)} rounds`:''}`;}
+},
+{ title:'Why keep failed rows? (T_cleanup)', pane:'sim', mode:'observer', select:0,
+  warm:8, setup:{n:14, tfail:5, tcleanup:1, loss:0, latency:3, seed:9},
+  intro:'<p>Here <code>T_cleanup</code> is deliberately tiny. A member deletes the dead row almost immediately. But other members that have not yet marked it failed still gossip their older copy of the row, and a member that has no row treats any counter as news. The dead member is re-added with a fresh timer and has to be failed all over again.</p>',
+  steps:[
+    {say:'Crash G with T_cleanup = 1 round.', btn:'Crash G', run:()=>{G.sim.crash(6);gMark();gRounds(1);}},
+    {say:'Run and watch the readout. Each "re-add" is a member resurrecting a dead node.', btn:'Run 14 rounds', run:()=>gRounds(14)},
+    {say:'The ghost keeps cycling: fail, delete, re-add. Failures are never settled.', btn:'Run 10 rounds', run:()=>gRounds(10)},
+    {say:'Fix it. T_cleanup becomes 10 rounds (about 2 x T_fail, longer than news takes to spread). Crash K and compare.', btn:'Set T_cleanup = 10, crash K', run:()=>{G.sim.p.tcleanup=10;G.sim.crash(10);gMark();gRounds(1);}},
+    {say:'Now the dead row outlives every stale copy, and deletion sticks.', btn:'Run 30 rounds', run:()=>gRounds(30)}
+  ],
+  readout:()=>{const s=G.sim,m=G.mark.ghosts||[];const g=i=>s.nodes[i].ghosts-(m[i]||0);
+    return `T_cleanup = ${s.p.tcleanup} rounds<br>G: re-added ${s.nodes[6].ghosts} time(s) after deletion · K: re-added ${s.nodes[10].ghosts} time(s)`;}
+},
+{ title:'False accusations: loss versus T_fail', pane:'sim', mode:'observer', select:0,
+  setup:{n:12, tfail:2, tcleanup:4, loss:0.2, latency:4, seed:21},
+  intro:'<p>Nobody has crashed in this cluster, yet members will accuse each other. If <code>T_fail</code> is shorter than the usual gap between updates for a row (news takes several rounds to arrive, more with message loss), healthy members look dead. The accusation clears when a newer counter finally arrives.</p>',
+  steps:[
+    {say:'T_fail = 2 rounds and 20% message loss. Watch the red nodes and the count.', btn:'Run 10 rounds', run:()=>{gMark();gRounds(10);}},
+    {say:'Raise T_fail to 5 rounds and measure another 10.', btn:'T_fail = 5, run 10 rounds', run:()=>{G.sim.p.tfail=5;gMark();gRounds(10);}},
+    {say:'Raise T_fail to 9 rounds. Accusations should all but disappear.', btn:'T_fail = 9, run 10 rounds', run:()=>{G.sim.p.tfail=9;gMark();gRounds(10);}},
+    {say:'The price is detection speed. Crash L and see how long full detection takes now.', btn:'Crash L, run 16 rounds', run:()=>{G.sim.crash(11);gRounds(16);}}
+  ],
+  readout:()=>{const s=G.sim,l=s.nodes[11];return `T_fail = ${s.p.tfail} · loss ${Math.round(s.p.loss*100)}%<br>false accusations since last step: ${s.stats.falsePos-(G.mark.fp||0)} · wrongly marked right now: ${s.wrongPairs()}${l.crashT!=null?`<br>L crashed: all live members detected after ${l.allDetect!=null?rounds1(l.allDetect-l.crashT)+' rounds':'… not yet'}`:''}`;}
+},
+{ title:'Network partitions and healing', pane:'sim', mode:'observer', select:0,
+  warm:8, setup:{n:12, tfail:5, tcleanup:10, loss:0, latency:3, seed:4},
+  intro:'<p>During a partition each side correctly sees the other as unreachable and marks it failed. What happens at healing depends on whether the failed rows are still in the lists.</p>',
+  steps:[
+    {say:'Cut the network into two halves. Messages across the cut are dropped (red crosses).', btn:'Split network', run:()=>{G.sim.partition=true;G.sim.note('network split','crash');gRounds(1);}},
+    {say:'Each side stops hearing from the other and, after T_fail, marks the whole other half failed.', btn:'Run 10 rounds', run:()=>gRounds(10)},
+    {say:'Heal while the failed rows still exist (T_cleanup has not expired). Members still pick them as gossip targets, and the first cross message with a higher counter revives each row.', btn:'Heal, run 6 rounds', run:()=>{G.sim.partition=false;G.sim.note('network healed','ok');gRounds(6);}},
+    {say:'Now stay split long enough for T_fail + T_cleanup to expire.', btn:'Split again, run 30 rounds', run:()=>{G.sim.partition=true;G.sim.note('network split','crash');gRounds(30);}},
+    {say:'Heal again. Nobody remembers anyone on the other side, so nobody ever gossips across.', btn:'Heal, run 12 rounds', run:()=>{G.sim.partition=false;G.sim.note('network healed','ok');gRounds(12);}},
+    {say:'A real deployment needs a seed or introducer. Give A the address of one member from the other half and gossip merges everything.', btn:'Introduce A to L, run 14 rounds', run:()=>{G.sim.introduce(0,11);gRounds(14);}}
+  ],
+  readout:()=>{const s=G.sim;let bad=0,tot=0;for(const o of s.nodes){for(const n of s.nodes){if(o.group===n.group)continue;tot++;const e=o.table.get(n.id);if(!e||e.failed)bad++;}}
+    return `${s.partition?'NETWORK SPLIT':'network connected'} · cross-half rows failed or forgotten: ${bad} of ${tot}<br>A knows ${s.nodes[0].table.size} of ${s.nodes.length} members`;}
+},
+{ title:'Subnet-aware gossip', pane:'sim', mode:'observer', select:0,
+  warm:8, setup:{n:16, tfail:8, tcleanup:12, loss:0, latency:3, subnets:4, crossP:0.5, seed:2},
+  intro:'<p>Sending most gossip across routers is costly. The paper therefore favors local peers. In this lab each gossip crosses to another subnet with probability <i>p</i> (coloured rings show subnets; amber dots are cross-subnet messages). Lower <i>p</i> saves router traffic but slows news between subnets.</p>',
+  steps:[
+    {say:'Cross-subnet probability is 50%. Measure the share of messages that cross subnets.', btn:'Run 8 rounds', run:()=>{gMark();gRounds(8);}},
+    {say:'Drop it to 10%.', btn:'p = 10%, run 8 rounds', run:()=>{G.sim.p.crossP=0.1;gMark();gRounds(8);}},
+    {say:'The cost shows up in detection of failures in other subnets. Crash a member of subnet 3 and compare with the 50% setting; with less cross-subnet gossip, news about it travels between subnets more slowly.', btn:'Crash P, run 18 rounds', run:()=>{G.sim.crash(15);gRounds(18);}}
+  ],
+  readout:()=>{const s=G.sim,sent=s.stats.sent-(G.mark.sent||0),cr=s.stats.cross-(G.mark.cross||0),p=s.nodes[15];
+    return `cross-subnet probability ${Math.round(s.p.crossP*100)}%<br>since last step: ${cr} of ${sent} messages crossed subnets (${sent?Math.round(100*cr/sent):0}%)${p.crashT!=null?`<br>P crashed: all detected ${p.allDetect!=null?'after '+rounds1(p.allDetect-p.crashT)+' rounds':'… not yet'}`:''}`;}
+}
+];
+
+function gInit(){
+  G.view = new SimView($('#g-sim'),{speed:14,speedBar:true,onUpdate:gReadout});
+  G.view.onSelect = ()=>gReadout();
+  views.push(G.view);
+  $('#g-nav').innerHTML = LESSONS.map((l,i)=>`<li><button data-i="${i}"><span class="n">${i+1}</span><span>${l.title}</span></button></li>`).join('');
+  $('#g-nav').addEventListener('click',e=>{const b=e.target.closest('button'); if(b) gLoad(+b.dataset.i);});
+  $('#g-restart').addEventListener('click',()=>gLoad(G.i));
+  $('#g-prev').addEventListener('click',()=>gLoad(Math.max(0,G.i-1)));
+  $('#g-next').addEventListener('click',()=>gLoad(Math.min(LESSONS.length-1,G.i+1)));
+  gLoad(0);
+}
+function gLoad(i){
+  G.i=i; G.step=0; const L=LESSONS[i];
+  $('#g-title').textContent=L.title; $('#g-intro').innerHTML=L.intro;
+  document.querySelectorAll('#g-nav button').forEach(b=>b.setAttribute('aria-current', +b.dataset.i===i));
+  $('#g-prev').disabled=i===0; $('#g-next').disabled=i===LESSONS.length-1;
+  $('#g-sim').hidden = L.pane!=='sim'; $('#g-merge').hidden = L.pane!=='merge';
+  if(L.pane==='sim'){
+    G.sim=new Sim(L.setup); G.mark={}; G.view.sel=L.select||0; G.view.setMode(L.mode||'observer'); G.view.setSim(G.sim);
+  } else { G.sim=new Sim(L.setup); }
+  if(L.warm){ const s=G.sim; s.runRounds(L.warm); s.mlog=[]; s.log=[]; s.hist=[]; for(const k in s.stats) s.stats[k]=0; G.view.refreshTable(); G.view.refreshMsgs(); }
+  if(L.init) L.init();
+  gSteps(); gReadout();
+}
+function gSteps(){
+  const L=LESSONS[G.i], ol=$('#g-steps');
+  ol.innerHTML=L.steps.map((s,k)=>{
+    const st=k<G.step?'done':(k===G.step?'cur':'');
+    return `<li class="${st}"><span class="dot">${k<G.step?'✓':k+1}</span><div>${k<=G.step?`<p>${s.say}</p>`:`<p>${s.say.split('.')[0]}.</p>`}${k===G.step?`<button class="btn primary sm" data-k="${k}">${s.btn}</button>`:''}</div></li>`;
+  }).join('') + (G.step>=L.steps.length?`<li class="done"><span class="dot">✓</span><div><p>Flow complete. ${G.i<LESSONS.length-1?'Continue with the next flow, or restart this one.':'Open the Playground to experiment freely.'}</p></div></li>`:'');
+}
+$('#g-steps').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-k]'); if(!b) return;
+  const L=LESSONS[G.i], s=L.steps[+b.dataset.k]; s.run(); G.step++; gSteps(); gReadout();
+});
+function gReadout(){
+  const L=LESSONS[G.i]; if(!L||!G.sim) return;
+  $('#g-readout').innerHTML=L.readout();
+  const busy=G.view.pending>0; document.querySelectorAll('#g-steps button').forEach(b=>b.disabled=busy);
+}
+
+/* =====================================================================
+   Playground
+   ===================================================================== */
+const P = {sim:null, view:null, roundMs:1000};
+const CTRL = [
+ {grp:'Cluster', items:[
+  {k:'n',label:'Members (N)',min:4,max:40,step:1,reset:true,hint:'Lists get longer and news needs about log N rounds to reach everyone.'},
+  {k:'fanout',label:'Gossips per round',min:1,max:4,step:1,hint:'The paper sends to one member. More means faster spread and proportionally more traffic.'}]},
+ {grp:'Failure detector', items:[
+  {k:'tfail',label:'T_fail',min:1,max:25,step:0.5,fmt:v=>v+' rounds',hint:'Silence needed before a row is marked failed. Low: fast but trigger-happy. High: safe but slow.'},
+  {k:'tcleanup',label:'T_cleanup',min:0,max:30,step:0.5,fmt:v=>v+' rounds',hint:'How long a failed row is kept. Too low and dead members get resurrected by stale gossip.'}]},
+ {grp:'Network', items:[
+  {k:'loss',label:'Message loss',min:0,max:90,step:1,scale:0.01,fmt:v=>v+'%',hint:'Chance that any gossip message is dropped.'},
+  {k:'latency',label:'Max delay',min:1,max:20,step:1,fmt:v=>`${v} ticks (${(v/10).toFixed(1)} round)`,hint:'Each message takes a random 1 to max ticks to arrive.'}]},
+ {grp:'Subnets', items:[
+  {k:'subnets',label:'Subnets',min:1,max:4,step:1,reset:true,hint:'Splits members into equal groups (coloured rings).'},
+  {k:'crossP',label:'Cross-subnet gossip',min:0,max:100,step:5,scale:0.01,fmt:v=>v+'%',hint:'Chance a gossip goes to another subnet. Only matters with 2+ subnets.'}]}
+];
+const PRESETS = {
+  'Healthy LAN':{n:16,tfail:8,tcleanup:12,loss:0.02,latency:3,fanout:1,subnets:1,note:'Low loss and a comfortable T_fail. Crash a member and watch every list agree.'},
+  'Lossy network':{n:16,tfail:8,tcleanup:12,loss:0.45,latency:5,fanout:1,subnets:1,note:'45% loss with T_fail = 8. Expect some false accusations and slow detection.'},
+  'Trigger-happy':{n:16,tfail:2.5,tcleanup:8,loss:0.1,latency:3,fanout:1,subnets:1,note:'T_fail is shorter than normal news delay, so healthy members get accused constantly.'},
+  'Ghost entries':{n:16,tfail:6,tcleanup:0.5,loss:0,latency:4,fanout:1,subnets:1,note:'T_cleanup is far too short. Crash a member and watch it get re-added in the log.'},
+  'Large cluster':{n:40,tfail:14,tcleanup:20,loss:0.05,latency:3,fanout:1,subnets:1,note:'40 members. Compare spread time with the log N estimate in Metrics.'},
+  'Fast fan-out':{n:24,tfail:5,tcleanup:8,loss:0.05,latency:3,fanout:3,subnets:1,note:'Three gossips per round: faster detection at three times the traffic.'},
+  'Four subnets':{n:24,tfail:12,tcleanup:16,loss:0.05,latency:3,fanout:1,subnets:4,crossP:0.15,note:'Mostly local gossip. Crash a member and see how long other subnets take to notice.'}
+};
+
+function pInit(){
+  P.sim=new Sim({});
+  P.view=new SimView($('#p-sim'),{playing:true,speed:10,onUpdate:pUpdate});
+  P.view.onSelect=()=>pUpdate();
+  P.view.setSim(P.sim); views.push(P.view);
+  // controls
+  const host=$('#p-controls'); let h='<h3 style="margin-bottom:10px">Parameters</h3>';
+  for(const g of CTRL){
+    h+=`<div class="ctrl-group"><h4>${g.grp}</h4>`;
+    for(const c of g.items){
+      h+=`<div class="ctrl"><label for="k-${c.k}">${c.label}<output id="o-${c.k}"></output></label><input type="range" id="k-${c.k}" min="${c.min}" max="${c.max}" step="${c.step}"><small>${c.hint}</small></div>`;
+    }
+    h+='</div>';
+  }
+  h+=`<div class="ctrl-group"><h4>Timing and seed</h4>
+    <div class="ctrl"><label for="k-roundms">T_gossip (one round)<output id="o-roundms"></output></label><input type="range" id="k-roundms" min="100" max="5000" step="100"><small>Only converts rounds to seconds in the readouts below. It does not change the simulation.</small></div>
+    <div class="ctrl"><label for="k-seed">Random seed</label><input type="number" id="k-seed" min="0" max="999999"><small>Same seed and settings give the same run. Changing it restarts the cluster.</small></div></div>`;
+  host.innerHTML=h;
+  for(const g of CTRL) for(const c of g.items){
+    const el=$('#k-'+c.k);
+    el.addEventListener('input',()=>{ pShowVal(c); if(!c.reset) P.sim.p[c.k]=+el.value*(c.scale||1); });
+    if(c.reset) el.addEventListener('change',()=>{ P.sim.p[c.k]=+el.value*(c.scale||1); pReset(); });
+  }
+  $('#k-roundms').addEventListener('input',e=>{P.roundMs=+e.target.value; pShowVal(null); pUpdate();});
+  $('#k-seed').addEventListener('change',e=>{P.sim.p.seed=Math.max(0,parseInt(e.target.value)||0); pReset();});
+  pSync();
+  // presets
+  $('#p-presets').innerHTML=Object.keys(PRESETS).map(k=>`<button class="btn sm" data-p="${k}">${k}</button>`).join('');
+  $('#p-presets').addEventListener('click',e=>{
+    const b=e.target.closest('button'); if(!b) return;
+    const pr=PRESETS[b.dataset.p], p=Object.assign({},DEFAULTS,{seed:P.sim.p.seed},pr); delete p.note;
+    P.sim=new Sim(p); pAttach(); $('#p-preset-note').textContent=pr.note;
+  });
+  // toolbar
+  const play=$('#p-play');
+  play.addEventListener('click',()=>{P.view.playing=!P.view.playing; play.textContent=P.view.playing?'Pause':'Play';});
+  $('#p-tick').addEventListener('click',()=>{P.view.playing=false;play.textContent='Play';P.sim.tick();});
+  $('#p-round').addEventListener('click',()=>{P.view.playing=false;play.textContent='Play';P.sim.runRounds(1);});
+  $('#p-speed').addEventListener('input',e=>P.view.speed=+e.target.value);
+  $('#p-reset').addEventListener('click',()=>{P.sim=new Sim(P.sim.p);pAttach();});
+  $('#p-crash-sel').addEventListener('click',()=>{P.sim.crash(P.view.sel);pUpdate(true);});
+  $('#p-revive-sel').addEventListener('click',()=>{P.sim.revive(P.view.sel);pUpdate(true);});
+  $('#p-crash-rand').addEventListener('click',()=>{const a=P.sim.nodes.filter(n=>n.alive);if(a.length)P.sim.crash(a[Math.floor(Math.random()*a.length)].id);pUpdate(true);});
+  $('#p-add').addEventListener('click',()=>{P.sim.addNode();pUpdate(true);});
+  $('#p-part').addEventListener('click',()=>{P.sim.partition=!P.sim.partition;P.sim.note(P.sim.partition?'network split':'network healed',P.sim.partition?'crash':'ok');$('#p-part').textContent=P.sim.partition?'Heal network':'Split network';pUpdate(true);});
+  pUpdate(true);
+}
+function pAttach(){
+  P.view.setSim(P.sim); P.view.sel=0; P.view.refreshTable();
+  $('#p-part').textContent='Split network'; pSync(); pUpdate(true);
+}
+function pReset(){ P.sim=new Sim(P.sim.p); pAttach(); }
+function pShowVal(c){
+  const items=c?[c]:[];
+  for(const x of items){ const v=+$('#k-'+x.k).value; $('#o-'+x.k).textContent=x.fmt?x.fmt(v):v; }
+  $('#o-roundms').textContent=P.roundMs+' ms';
+}
+function pSync(){
+  for(const g of CTRL) for(const c of g.items){ const el=$('#k-'+c.k); el.value=Math.round(P.sim.p[c.k]/(c.scale||1)*100)/100; pShowVal(c); }
+  $('#k-roundms').value=P.roundMs; $('#o-roundms').textContent=P.roundMs+' ms';
+  $('#k-seed').value=P.sim.p.seed;
+}
+let pLastLog=-1, pLastHist=-1, pLastDraw=0;
+function pUpdate(force){
+  const s=P.sim, st=s.stats, alive=s.nodes.filter(n=>n.alive).length;
+  const now=performance.now();
+  if(!force && now-pLastDraw<120) return; pLastDraw=now;
+  const tiles=[
+    ['Round',rounds1(s.time)],['Alive',`${alive} / ${s.nodes.length}`],['Messages sent',st.sent],['Lost',st.lost+(st.sent?` (${Math.round(100*st.lost/st.sent)}%)`:'')],
+    ['Avg message size',(st.sent?(st.entries/st.sent).toFixed(1):'0')+' rows'],['False accusations',st.falsePos],['Cleared later',st.recovered],['Ghost re-adds',st.ghosts],
+    ['Cross-subnet share',s.p.subnets>1&&st.sent?Math.round(100*st.cross/st.sent)+'%':'n/a'],['Wrong right now',s.wrongPairs()]];
+  $('#p-tiles').innerHTML=tiles.map(t=>`<div class="tile"><b>${t[1]}</b><span>${t[0]}</span></div>`).join('');
+  const N=Math.max(2,alive), th=Math.log2(N)+Math.log(N);
+  $('#p-theory').innerHTML=`Epidemic spread time with one gossip per round is about log2 N + ln N = <b>${th.toFixed(1)} rounds</b> (${(th*P.roundMs/1000).toFixed(1)} s at T_gossip = ${P.roundMs} ms). `+
+    `T_fail = ${s.p.tfail} rounds = ${(s.p.tfail*P.roundMs/1000).toFixed(1)} s; forgetting a dead member takes at least ${((s.p.tfail+s.p.tcleanup)*P.roundMs/1000).toFixed(1)} s.`;
+  const h=s.hist;
+  lineChart($('#c-cov'),[{pts:h.map(x=>x.cov==null?null:[x.r,x.cov]),color:'--bad'}],{ymin:0,ymax:100,xmin:h.length?h[0].r:0,xmax:Math.max(h.length?h[h.length-1].r:1,(h.length?h[0].r:0)+10),empty:'crash a member to see detection progress'});
+  lineChart($('#c-wrong'),[{pts:h.map(x=>[x.r,x.wrong]),color:'--warn'}],{ymin:0,xmin:h.length?h[0].r:0,xmax:Math.max(h.length?h[h.length-1].r:1,(h.length?h[0].r:0)+10)});
+  if(pLastLog!==s.log.length||force){
+    pLastLog=s.log.length;
+    $('#p-log').innerHTML=s.log.slice(-60).reverse().map(l=>`<li class="k-${l.kind}"><b>r${rounds1(l.t)}</b>${l.msg}</li>`).join('')||'<li><b></b>Nothing yet. Crash a member or change a parameter.</li>';
+  }
+}
+
+/* ---------- experiment runner ---------- */
+function runTrial(p,seed){
+  const s=new Sim(Object.assign({},p,{seed}));
+  const warm=10, maxR=warm+Math.ceil(p.tfail*2)+4*Math.ceil(Math.log2(p.n))+30;
+  s.runRounds(warm);
+  const alive=s.nodes.filter(n=>n.alive), v=alive[Math.floor(s.rng()*alive.length)];
+  s.crash(v.id);
+  let r=warm;
+  while(r<maxR && v.allDetect==null){ s.runRounds(1); r++; }
+  return {det:v.allDetect!=null?(v.allDetect-v.crashT)/TPR:null, fp:s.stats.falsePos, nr:s.nodes.length*r};
+}
+const SWEEPS = {
+  tfail:{vals:[2,3,4,5,6,8,10,12,14,16],fmt:v=>v,name:'T_fail (rounds)'},
+  loss:{vals:[0,0.1,0.2,0.3,0.4,0.5,0.6],fmt:v=>Math.round(v*100),name:'message loss (%)'},
+  n:{vals:[4,8,16,24,32,48,64],fmt:v=>v,name:'members N'},
+  fanout:{vals:[1,2,3,4],fmt:v=>v,name:'gossips per round'},
+  tcleanup:{vals:[0,1,2,4,6,8,12],fmt:v=>v,name:'T_cleanup (rounds)'}
+};
+let xRunning=false;
+function xInit(){
+  $('#x-run').addEventListener('click',()=>{
+    if(xRunning) return;
+    const key=$('#x-var').value, sw=SWEEPS[key], trials=Math.max(3,Math.min(60,+$('#x-trials').value||15));
+    const base=Object.assign({},P.sim.p); xRunning=true; $('#x-run').disabled=true;
+    const det=[],fpr=[],miss=[]; let i=0;
+    $('#x-t1').textContent=`Rounds until every live member detects the crash, by ${sw.name}`;
+    $('#x-t2').textContent=`False accusations per 1000 member-rounds, by ${sw.name}`;
+    const step=()=>{
+      if(i>=sw.vals.length){
+        xRunning=false; $('#x-run').disabled=false; $('#x-prog').style.width='100%';
+        const worst=miss.reduce((a,b)=>Math.max(a,b),0);
+        $('#x-note').textContent=`Each point averages ${trials} trials from the current settings (${Object.entries(base).filter(([k])=>k!==key&&k!=='seed').map(([k,v])=>k+'='+v).join(', ')}).`+(worst>0?` Up to ${Math.round(worst*100)}% of trials at some point never reached full detection within the time limit and are counted at the limit.`:'');
+        return;
+      }
+      const v=sw.vals[i], p=Object.assign({},base,{[key]:v});
+      let dsum=0,fp=0,nr=0,m=0;
+      for(let t=0;t<trials;t++){
+        const r=runTrial(p,base.seed*1000+t+1);
+        if(r.det==null){m++; dsum+=Math.ceil(p.tfail*2)+4*Math.ceil(Math.log2(p.n))+20;} else dsum+=r.det;
+        fp+=r.fp; nr+=r.nr;
+      }
+      const x=+sw.fmt(v);
+      det.push([x,dsum/trials]); fpr.push([x,1000*fp/nr]); miss.push(m/trials);
+      i++; $('#x-prog').style.width=Math.round(100*i/sw.vals.length)+'%';
+      const xt=det.map(d=>d[0]);
+      lineChart($('#x-c1'),[{pts:det,color:'--accent'}],{markers:true,xticks:xt,xmin:xt[0],xmax:xt[xt.length-1]||1,xfmt:v=>v});
+      lineChart($('#x-c2'),[{pts:fpr,color:'--warn'}],{markers:true,xticks:xt,xmin:xt[0],xmax:xt[xt.length-1]||1,xfmt:v=>v});
+      setTimeout(step,10);
+    };
+    step();
+  });
+  const blank=()=>{lineChart($('#x-c1'),[],{empty:'run a sweep'});lineChart($('#x-c2'),[],{empty:'run a sweep'});};
+  P.blankX=blank; blank();
+}
+
+/* ---------- boot ---------- */
+gInit(); pInit(); xInit();
+requestAnimationFrame(loop);
+const initial=(location.hash||'').slice(1);
+if(['learn','guided','play'].includes(initial)) showTab(initial);
+window.addEventListener('resize',()=>{pUpdate(true); if(P.blankX&&!xRunning&&!$('#x-note').textContent) P.blankX();});
+try{ matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{pUpdate(true); if(!$('#x-note').textContent) P.blankX();}); }catch(e){}
+</script>
+</body>
+</html>
